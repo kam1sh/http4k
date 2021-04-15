@@ -29,7 +29,7 @@ class WebFormTest {
             webForm of WebForm().with(stringField of "world", intField of 123)
         )
 
-        assertThat(Header.CONTENT_TYPE(populatedRequest), equalTo(APPLICATION_FORM_URLENCODED))
+        assertThat(CONTENT_TYPE(populatedRequest), equalTo(APPLICATION_FORM_URLENCODED))
         assertThat(populatedRequest.bodyString(), equalTo("hello=world&another=123"))
     }
 
@@ -93,5 +93,3 @@ class WebFormTest {
         assertThat(intField(populated), equalTo(123))
     }
 }
-
-

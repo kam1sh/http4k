@@ -31,10 +31,12 @@ import org.http4k.core.Method.HEAD
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.OK
 import org.http4k.core.with
+import org.http4k.format.AutoMarshallingJson
 import org.http4k.format.Json
-import org.http4k.format.JsonLibAutoMarshallingJson
 import org.http4k.format.JsonType
 import org.http4k.lens.Header.CONTENT_TYPE
+import org.http4k.lens.ParamMeta
+import org.http4k.lens.ParamMeta.ArrayParam
 import org.http4k.lens.ParamMeta.FileParam
 import org.http4k.lens.ParamMeta.ObjectParam
 import org.http4k.lens.ParamMeta.StringParam
@@ -49,13 +51,19 @@ class OpenApi3<NODE : Any>(
     private val apiInfo: ApiInfo,
     private val json: Json<NODE>,
     private val extensions: List<OpenApiExtension> = emptyList(),
+    // note that this is the basic OpenApi renderer - if you want reflective Schema generation
+    // then you want to use ApiRenderer.Auto() instead with a compatible JSON instance
     private val apiRenderer: ApiRenderer<Api<NODE>, NODE> = OpenApi3ApiRenderer(json),
     private val securityRenderer: SecurityRenderer = OpenApi3SecurityRenderer,
     private val errorResponseRenderer: ErrorResponseRenderer = JsonErrorResponseRenderer(json)
 ) : ContractRenderer, ErrorResponseRenderer by errorResponseRenderer {
     private data class PathAndMethod<NODE>(val path: String, val method: Method, val pathSpec: ApiPath<NODE>)
 
-    constructor(apiInfo: ApiInfo, json: JsonLibAutoMarshallingJson<NODE>, extensions: List<OpenApiExtension> = emptyList()) : this(apiInfo, json, extensions, ApiRenderer.Auto(json))
+    constructor(
+        apiInfo: ApiInfo,
+        json: AutoMarshallingJson<NODE>,
+        extensions: List<OpenApiExtension> = emptyList()
+    ) : this(apiInfo, json, extensions, ApiRenderer.Auto(json))
 
     override fun description(contractRoot: PathSegments, security: Security?, routes: List<ContractRoute>): Response {
         val allSecurities = routes.map { it.meta.security } + listOfNotNull(security)
@@ -71,7 +79,10 @@ class OpenApi3<NODE : Any>(
                         it.value.map { pam -> pam.method.name.toLowerCase() to pam.pathSpec }.toMap().toSortedMap()
                     }
                     .toSortedMap(),
-                Components(json.obj(paths.flatMap { it.pathSpec.definitions() }), json(allSecurities.filterNotNull().combineFull()))
+                Components(
+                    json.obj(paths.flatMap { it.pathSpec.definitions() }),
+                    json(allSecurities.filterNotNull().combineFull())
+                )
             )
         )
 
@@ -118,8 +129,10 @@ class OpenApi3<NODE : Any>(
         .groupBy { it.message.status.code.toString() }
         .map {
             it.key to
-                ResponseContents<NODE>(it.value
-                    .map { it.description }.toSortedSet().joinToString(","), it.value.collectSchemas())
+                ResponseContents<NODE>(
+                    it.value
+                        .map { it.description }.toSortedSet().joinToString(","), it.value.collectSchemas()
+                )
         }.toMap()
 
     private fun List<HttpMessageMeta<Response>>.collectSchemas() = groupBy { CONTENT_TYPE(it.message) }
@@ -134,13 +147,20 @@ class OpenApi3<NODE : Any>(
         .toMap()
 
     private fun ContractRoute.asOpenApiParameters() = nonBodyParams.map {
-        when (it.paramMeta) {
+        val paramMeta: ParamMeta = it.paramMeta
+        when (paramMeta) {
             ObjectParam -> SchemaParameter(it, "{}".toSchema())
             FileParam -> PrimitiveParameter(it, json {
                 obj("type" to string(FileParam.value), "format" to string("binary"))
             })
+            is ArrayParam -> PrimitiveParameter(it, json {
+                obj(
+                    "type" to string("array"),
+                    "items" to obj("type" to string(paramMeta.itemType().value))
+                )
+            })
             else -> PrimitiveParameter(it, json {
-                obj("type" to string(it.paramMeta.value))
+                obj("type" to string(paramMeta.value))
             })
         }
     }
@@ -176,7 +196,8 @@ class OpenApi3<NODE : Any>(
     private fun HttpMessageMeta<HttpMessage>.toSchemaContent(): BodyContent {
         fun exampleSchemaIsValid(schema: JsonSchema<NODE>) =
             if (example is Array<*>
-                || example is Iterable<*>) !json.fields(schema.node).toMap().containsKey("\$ref")
+                || example is Iterable<*>
+            ) !json.fields(schema.node).toMap().containsKey("\$ref")
             else apiRenderer.toSchema(object {}) != schema
 
         val jsonSchema = example

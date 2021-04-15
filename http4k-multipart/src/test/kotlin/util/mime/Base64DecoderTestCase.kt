@@ -84,7 +84,6 @@ class Base64DecoderTestCase {
             Base64Decoder.decode(x, ByteArrayOutputStream())
         } catch (e: IOException) {
         }
-
     }
 
     @Test
@@ -153,7 +152,7 @@ class Base64DecoderTestCase {
 
     companion object {
 
-        private val US_ASCII_CHARSET = "US-ASCII"
+        private const val US_ASCII_CHARSET = "US-ASCII"
 
         @Throws(Exception::class)
         private fun assertEncoded(clearText: String, encoded: String) {

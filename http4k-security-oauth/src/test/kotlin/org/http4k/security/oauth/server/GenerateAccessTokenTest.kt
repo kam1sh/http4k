@@ -1,10 +1,10 @@
 package org.http4k.security.oauth.server
 
-import com.natpryce.get
 import com.natpryce.hamkrest.and
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.containsSubstring
 import com.natpryce.hamkrest.equalTo
+import dev.forkhandles.result4k.get
 import org.http4k.core.ContentType
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
@@ -36,7 +36,7 @@ import java.time.temporal.TemporalUnit
 
 class GenerateAccessTokenTest {
 
-    private val json: AutoMarshallingJson = Jackson
+    private val json: AutoMarshallingJson<*> = Jackson
     private val handlerClock = SettableClock()
     private val codes = InMemoryAuthorizationCodes(FixedClock)
     private val authRequest = AuthRequest(ClientId("a-clientId"), listOf(), Uri.of("redirect"), State("state"))
@@ -74,7 +74,7 @@ class GenerateAccessTokenTest {
 
         assertThat(response, hasStatus(OK))
 
-        assertThat(accessTokenResponseBody(response), equalTo(AccessTokenResponse("dummy-access-token", "Bearer", idToken = "dummy-id-token-for-access-token")))
+        assertThat(accessTokenResponseBody(response), equalTo(AccessTokenResponse("dummy-access-token", "Bearer", id_token = "dummy-id-token-for-access-token")))
     }
 
     @Test
@@ -87,11 +87,11 @@ class GenerateAccessTokenTest {
             .form("client_secret", "a-secret"))
 
         assertThat(response, hasStatus(OK) and hasBody(accessTokenResponseBody, equalTo(AccessTokenResponse(
-            accessToken = DummyRefreshTokens.newAccessToken.value,
-            tokenType = DummyRefreshTokens.newAccessToken.type,
+            access_token = DummyRefreshTokens.newAccessToken.value,
+            token_type = DummyRefreshTokens.newAccessToken.type,
             scope = DummyRefreshTokens.newAccessToken.scope,
-            expiresIn = DummyRefreshTokens.newAccessToken.expiresIn,
-            refreshToken = DummyRefreshTokens.newAccessToken.refreshToken?.value
+            expires_in = DummyRefreshTokens.newAccessToken.expiresIn,
+            refresh_token = DummyRefreshTokens.newAccessToken.refreshToken?.value
         ))))
     }
 
@@ -145,7 +145,7 @@ class GenerateAccessTokenTest {
 
         assertThat(response, hasStatus(OK))
 
-        assertThat(accessTokenResponseBody(response), equalTo(AccessTokenResponse("dummy-access-token", "Bearer", idToken = "dummy-id-token-for-access-token")))
+        assertThat(accessTokenResponseBody(response), equalTo(AccessTokenResponse("dummy-access-token", "Bearer", id_token = "dummy-id-token-for-access-token")))
     }
 
     @Test

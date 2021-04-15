@@ -9,7 +9,7 @@ import java.net.URL
  * WARNING: A ResourceLoader serves ANY resource it finds within it's structure. This means that you should be
  * VERY careful to limit what resources it has access to.
  */
-interface ResourceLoader {
+fun interface ResourceLoader {
     fun load(path: String): URL?
 
     companion object {
@@ -39,9 +39,13 @@ interface ResourceLoader {
         fun Directory(baseDir: String = ".") = object : ResourceLoader {
             private val finalBaseDir = if (baseDir.endsWith("/")) baseDir else "$baseDir/"
 
-            override fun load(path: String): URL? =
-                File(finalBaseDir, path).let { f -> if (f.exists() && f.isFile) f.toURI().toURL() else null }
-        }
+            override fun load(path: String) = File(finalBaseDir, path)
+                .let {
+                    if (it.exists() && it.isFile && it.isUnder(finalBaseDir)) it.toURI().toURL()
+                    else null
+                }
 
+            private fun File.isUnder(baseDir: String) = canonicalPath.startsWith(File(baseDir).canonicalPath)
+        }
     }
 }

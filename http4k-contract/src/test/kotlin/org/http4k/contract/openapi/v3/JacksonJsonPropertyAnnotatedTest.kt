@@ -13,12 +13,12 @@ class JacksonJsonPropertyAnnotatedTest {
 
     @Test
     fun `finds value from object`() {
-        assertThat("nonNullable", JacksonJsonPropertyAnnotated(Beany(), "NEWNAME"), equalTo(Field("hello", false)))
+        assertThat("nonNullable", JacksonJsonPropertyAnnotated(Beany(), "NEWNAME"), equalTo(Field("hello", false, FieldMetadata.empty)))
     }
 
     @Test
     fun `finds value from superclass object`() {
-        assertThat("superValue", JacksonJsonPropertyAnnotated(Beany(), "SUPERNEWNAME"), equalTo(Field("bob", false)))
+        assertThat("superValue", JacksonJsonPropertyAnnotated(Beany(), "SUPERNEWNAME"), equalTo(Field("bob", false, FieldMetadata.empty)))
     }
 
     @Test
@@ -26,4 +26,3 @@ class JacksonJsonPropertyAnnotatedTest {
         assertThat("non existent", { JacksonJsonPropertyAnnotated(Beany(), "non existent") }, throws<NoFieldFound>())
     }
 }
-

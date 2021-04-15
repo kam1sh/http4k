@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test
 
 class AnswerRecorder(private val httpClient: HttpHandler) : (Int) -> Unit {
     override fun invoke(answer: Int) {
-        httpClient(Request(POST, "/" + answer.toString()))
+        httpClient(Request(POST, "/$answer"))
     }
 }
 
@@ -115,5 +115,4 @@ class EndToEndTest {
         assertThat(response, hasStatus(OK).and(hasBody("the answer is 579")))
         assertThat(recorderHttp.calls, equalTo(listOf(579)))
     }
-
 }

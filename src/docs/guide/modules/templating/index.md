@@ -2,20 +2,29 @@ title: http4k Templating Modules
 description: Feature overview of the http4k-templating modules
 
 ### Installation (Gradle)
-**Dust:** ```compile group: "org.http4k", name: "http4k-template-dust", version: "3.249.0"```
 
-**Freemarker:** ```compile group: "org.http4k", name: "http4k-template-freemarker", version: "3.249.0"```
+```groovy
+// Dust: 
+implementation group: "org.http4k", name: "http4k-template-dust", version: "4.7.0.2"
 
-**Handlebars:** ```compile group: "org.http4k", name: "http4k-template-handlebars", version: "3.249.0"```
+// Freemarker: 
+implementation group: "org.http4k", name: "http4k-template-freemarker", version: "4.7.0.2"
 
-**Jade4j:** ```compile group: "org.http4k", name: "http4k-template-jade4j", version: "3.249.0"```
+// Handlebars: 
+implementation group: "org.http4k", name: "http4k-template-handlebars", version: "4.7.0.2"
 
-**Pebble:** ```compile group: "org.http4k", name: "http4k-template-pebble", version: "3.249.0"```
+// Jade4j: 
+implementation group: "org.http4k", name: "http4k-template-jade4j", version: "4.7.0.2"
 
-**Thymeleaf:** ```compile group: "org.http4k", name: "http4k-template-thymeleaf", version: "3.249.0"```
+// Pebble: 
+implementation group: "org.http4k", name: "http4k-template-pebble", version: "4.7.0.2"
+
+// Thymeleaf: 
+implementation group: "org.http4k", name: "http4k-template-thymeleaf", version: "4.7.0.2"
+```
 
 ### About
-The [http4k] templating API provides a standard mechanism for rendering using common templating libraries. Simply implement the `ViewModel` interface on a model class and pass it to the renderer to get a string. All of the implementations support view rendering using the following strategies:
+The http4k templating API provides a standard mechanism for rendering using common templating libraries. Simply implement the `ViewModel` interface on a model class and pass it to the renderer to get a string. All of the implementations support view rendering using the following strategies:
 
 * Cached on the classpath
 * Cached from the filesystem

@@ -1,6 +1,7 @@
 package org.http4k.contract.openapi.v3
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.http4k.core.ContentType.Companion.APPLICATION_JSON
 import org.http4k.core.Response
@@ -25,6 +26,7 @@ interface Generic
 data class RecursiveObject(val children: List<RecursiveObject> = emptyList())
 
 data class ArbObject2(val uri: Uri = Uri.of("foobar")) : Generic
+data class ArbObject3(val str: String = "stringValue", val num: Int = 1) : Generic
 
 data class ArbObjectHolder(val inner: List<ArbObject2> = listOf(ArbObject2()))
 
@@ -56,12 +58,24 @@ enum class Foo {
 data class GenericListHolder(val value: List<Generic>)
 data class MapHolder(val value: Map<Any, Any>)
 
+data class JacksonFieldAnnotated(@JsonProperty("OTHERNAME") val uri: Uri = Uri.of("foobar"))
+
+data class JacksonFieldWithMetadata(
+    @JsonPropertyDescription("Field 1 description")
+    val field1: String = "field1",
+    val field2: String = "field2"
+)
+
 @ExtendWith(JsonApprovalTest::class)
 class AutoJsonToJsonSchemaTest {
     private val json = Jackson
 
     private val creator = AutoJsonToJsonSchema(json,
-        FieldRetrieval.compose(SimpleLookup(), JacksonJsonPropertyAnnotated, JacksonJsonNamingAnnotated(Jackson)),
+        FieldRetrieval.compose(
+            SimpleLookup(metadataRetrievalStrategy = JacksonFieldMetadataRetrievalStrategy),
+            JacksonJsonPropertyAnnotated,
+            JacksonJsonNamingAnnotated(Jackson)
+        ),
         SchemaModelNamer.Full,
         "customPrefix"
     )
@@ -80,6 +94,25 @@ class AutoJsonToJsonSchemaTest {
                 "key3" to mapOf("inner" to ArbObject2())
             )
         ), "foobar")
+    }
+
+    @Test
+    fun `can write extra properties to map`(approver: Approver) {
+        val creator = AutoJsonToJsonSchema(json,
+            { _, name ->
+                if (name == "str") {
+                    Field("hello", false, FieldMetadata("string description", mapOf("key" to "string")))
+                } else {
+                    Field(123, false, FieldMetadata("int description", mapOf("key" to 123)))
+                }
+            },
+            SchemaModelNamer.Full,
+            "customPrefix"
+        )
+
+        approver.assertApproved(Response(OK)
+            .with(CONTENT_TYPE of APPLICATION_JSON)
+            .body(Jackson.asFormatString(creator.toSchema(ArbObject3()))))
     }
 
     @Test
@@ -178,6 +211,10 @@ class AutoJsonToJsonSchemaTest {
             .body(Jackson.asFormatString(AutoJsonToJsonSchema(json).toSchema(ArbObjectHolder()))))
     }
 
+    @Test
+    fun `renders schema for field with description`(approver: Approver) {
+        approver.assertApproved(JacksonFieldWithMetadata())
+    }
 
     private fun Approver.assertApproved(obj: Any, name: String? = null) {
         assertApproved(Response(OK)
@@ -185,7 +222,3 @@ class AutoJsonToJsonSchemaTest {
             .body(Jackson.asFormatString(creator.toSchema(obj, name))))
     }
 }
-
-data class JacksonFieldAnnotated(@JsonProperty("OTHERNAME") val uri: Uri = Uri.of("foobar"))
-
-

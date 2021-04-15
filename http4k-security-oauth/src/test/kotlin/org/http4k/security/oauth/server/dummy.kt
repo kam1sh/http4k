@@ -1,8 +1,8 @@
 package org.http4k.security.oauth.server
 
-import com.natpryce.Failure
-import com.natpryce.Result
-import com.natpryce.Success
+import dev.forkhandles.result4k.Failure
+import dev.forkhandles.result4k.Result
+import dev.forkhandles.result4k.Success
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Uri
@@ -31,7 +31,6 @@ class DummyIdTokens(private val username: String? = null) : IdTokens {
 
     override fun createForAccessToken(authorizationCodeDetails: AuthorizationCodeDetails, code: AuthorizationCode, accessToken: AccessToken): IdToken =
         IdToken("dummy-id-token-for-access-token")
-
 }
 
 class DummyAccessTokens : AccessTokens {
@@ -56,7 +55,6 @@ class DummyRefreshTokens : RefreshTokens {
             scope = "openid",
             refreshToken = RefreshToken("new-valid-refresh-token"))
     }
-
 }
 
 class ErroringAccessTokens(private val error: AuthorizationCodeAlreadyUsed) : AccessTokens {

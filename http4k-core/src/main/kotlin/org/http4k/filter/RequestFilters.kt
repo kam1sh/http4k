@@ -1,11 +1,15 @@
 package org.http4k.filter
 
+import org.http4k.core.Body
 import org.http4k.core.Filter
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Uri
+import org.http4k.core.with
 import org.http4k.filter.GzipCompressionMode.Memory
+import java.nio.ByteBuffer
+import java.util.Base64
 
 object RequestFilters {
 
@@ -70,5 +74,21 @@ object RequestFilters {
             }
         }
     }
-}
 
+    /**
+     * Some platforms deliver bodies as Base64 encoded strings.
+     */
+    fun Base64DecodeBody() = Filter { next ->
+        { next(it.body(Body(ByteBuffer.wrap(Base64.getDecoder().decode(it.body.payload.array()))))) }
+    }
+
+    /**
+     * Set a Header on the request message.
+     */
+    fun SetHeader(name: String, value: String?) = Filter { next -> { next(it.header(name, value)) } }
+
+    /**
+     * Modify request with lenses
+     */
+    fun Modify(vararg modifiers: (Request) -> Request): Filter = Filter { next -> { next(it.with(*modifiers)) } }
+}

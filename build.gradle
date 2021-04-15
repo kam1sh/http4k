@@ -1,49 +1,40 @@
 buildscript {
     repositories {
         mavenCentral()
-        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
     }
 
     dependencies {
         classpath Libs.kotlin_gradle_plugin
-        classpath Libs.gradle_cobertura_plugin
-        classpath Libs.coveralls_gradle_plugin
-        classpath Libs.dokka_gradle_plugin
-        classpath Libs.com_jfrog_bintray_gradle_plugin
         classpath Libs.openapi_generator_gradle_plugin
         classpath Libs.kotlin_serialization
+        classpath Libs.ktlint_gradle
+        classpath Libs.shadow
     }
 }
 
 plugins {
-    id 'com.github.kt3k.coveralls' version "2.10.1"
-    id "com.jfrog.bintray" version "1.8.4"
-    id 'de.fayard.buildSrcVersions' version "0.7.0"
-    id 'net.saliman.cobertura' version "3.0.0"
+    id "com.jfrog.bintray"
+    id "io.codearte.nexus-staging" version '0.22.0'
 }
 
-allprojects {
+apply plugin: 'io.codearte.nexus-staging'
 
+allprojects {
     repositories {
+        maven {
+            url "https://dl.bintray.com/fnproject/fnproject"
+        }
+
         mavenCentral()
-        jcenter()
     }
 
+    apply plugin: 'java'
     apply plugin: 'kotlin'
     apply plugin: 'jacoco'
-    apply plugin: 'cobertura'
-    apply plugin: 'com.github.kt3k.coveralls'
-    apply plugin: 'com.jfrog.bintray'
-    apply plugin: 'maven'
-    apply plugin: 'maven-publish'
-    apply plugin: 'org.jetbrains.dokka'
-
-    jacoco {
-        toolVersion = '0.8.3'
-    }
-
-    cobertura.coverageFormats = ['html', 'xml']
-    cobertura.coverageSourceDirs = ['src/main/kotlin']
+    apply plugin: 'org.jlleitschuh.gradle.ktlint'
 
     compileKotlin.kotlinOptions.jvmTarget = "1.8"
     compileTestKotlin.kotlinOptions.jvmTarget = "1.8"
@@ -58,23 +49,46 @@ allprojects {
         useJUnitPlatform()
     }
 
+    jacoco {
+        toolVersion = '0.8.6'
+    }
+
+    ktlint {
+        // for details, see description in .editorconfig file
+        enableExperimentalRules = false
+        version = "0.40.0"
+        debug = false
+    }
+
+    jacocoTestReport {
+        reports {
+            html.enabled = true
+            xml.enabled = true
+        }
+    }
+
+    tasks.withType(GenerateModuleMetadata) {
+        enabled = false
+    }
+}
+
+subprojects {
+
     task sourcesJar(type: Jar, dependsOn: classes) {
         classifier = 'sources'
         from sourceSets.main.allSource
     }
 
-//    task dokkaJavadoc(type: org.jetbrains.dokka.gradle.DokkaTask, overwrite: true, dependsOn: javadoc) {
-//        outputDirectory = javadoc.destinationDir
-//        outputFormat = "javadoc"
-//        processConfigurations = []
-//    }
-//    task javadocJar(type: Jar, dependsOn: dokkaJavadoc) {
-//        classifier = 'javadoc'
-//        from dokkaJavadoc.outputDirectory
-//    }
+    jar {
+        manifest {
+            attributes(
+                'http4k_version': archiveVersion
+            )
+        }
+    }
 
     task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier = 'javadoc'
+        archiveClassifier = 'javadoc'
         from javadoc.destinationDir
     }
 
@@ -84,16 +98,58 @@ allprojects {
     }
 
     configurations {
-        testArtifacts.extendsFrom testRuntime
+        testArtifacts.extendsFrom testApi
     }
 
     artifacts {
         testArtifacts testJar
+        archives sourcesJar, javadocJar
     }
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
+    if (hasAnArtifact(project)) {
+        def enableSigning = project.findProperty('sign') == "true"
+
+        apply plugin: 'com.jfrog.bintray'
+        apply plugin: 'maven-publish' // required to configure bintray
+
+        apply plugin: 'maven' // required to upload to sonatype
+
+        if (enableSigning) { // when added it expects signing keys to be configured
+            apply plugin: 'signing'
+
+            signing {
+                def signingKey = findProperty("signingKey")
+                def signingPassword = findProperty("signingPassword")
+
+                useInMemoryPgpKeys(signingKey, signingPassword)
+                sign publishing.publications
+            }
+        }
+
+        def nexusUsername = project.findProperty('nexusUsername') ?: "notset"
+        def nexusPassword = project.findProperty('nexusPassword') ?: "notset"
+
+        publishing {
+            repositories {
+                maven {
+                    name 'SonatypeStaging'
+                    url 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+                    credentials {
+                        username nexusUsername
+                        password nexusPassword
+                    }
+                }
+                maven {
+                    name 'SonatypeSnapshot'
+                    url 'https://oss.sonatype.org/content/repositories/snapshots/'
+                    credentials {
+                        username nexusUsername
+                        password nexusPassword
+                    }
+                }
+            }
+
+            publications {
                 mavenJava(MavenPublication) {
                     artifactId = archivesBaseName
 
@@ -107,61 +163,64 @@ allprojects {
                             .appendNode('developer').appendNode('name', 'David Denton').parent().appendNode('email', 'david@http4k.org')
                         asNode().appendNode('scm').
                             appendNode('url', 'git@github.com:http4k/' + archivesBaseName + '.git').parent().
-                            appendNode('connection', 'scm:git:git@github.com:http4k/' + archivesBaseName + '.git').parent().
-                            appendNode('developerConnection', 'scm:git:git@github.com:http4k/' + archivesBaseName + '.git')
+                            appendNode('connection', 'scm:git:git@github.com:http4k/http4k.git').parent().
+                            appendNode('developerConnection', 'scm:git:git@github.com:http4k/http4k.git')
                         asNode().appendNode('licenses').appendNode('license').
                             appendNode('name', 'Apache License, Version 2.0').parent().
                             appendNode('url', 'http://www.apache.org/licenses/LICENSE-2.0.html')
                     }
                     from components.java
 
+                    // replace all runtime dependencies with provided
+                    pom.withXml {
+                        asNode().dependencies.'*'.findAll() {
+                            it.scope.text() == 'runtime'
+                        }.each() {
+                            it.scope*.value = 'provided'
+                        }
+                    }
                     artifact sourcesJar
                     artifact javadocJar
                 }
             }
         }
-    }
 
-    bintray {
-        user = System.getenv('BINTRAY_USER')
-        key = System.getenv('BINTRAY_KEY')
+        bintray {
+            user = System.getenv('BINTRAY_USER')
+            key = System.getenv('BINTRAY_KEY')
 
-        publications = ['mavenJava']
-        dryRun = false
-        publish = true
-        pkg {
-            repo = 'maven'
-            userOrg = 'http4k'
-            name = project.name
+            publications = ['mavenJava']
+            dryRun = false
+            publish = true
+            pkg {
+                repo = 'maven'
+                userOrg = 'http4k'
+                name = project.name
 
-            desc = description
-            websiteUrl = 'https://github.com/http4k/http4k'
-            issueTrackerUrl = 'https://github.com/http4k/http4k/issues'
-            vcsUrl = 'https://github.com/http4k/http4k.git'
-            licenses = ['Apache-2.0']
-            labels = []
-            publicDownloadNumbers = true
-            version {
-                name = project.version
-                vcsTag = project.version
-                gpg {
-                    sign = true
-                }
-                mavenCentralSync {
-                    sync = false
-                    user = System.getenv('SONATYPE_USER')
-                    password = System.getenv('SONATYPE_KEY')
-                    close = '1'
+                desc = description
+                websiteUrl = 'https://github.com/http4k/http4k'
+                issueTrackerUrl = 'https://github.com/http4k/http4k/issues'
+                vcsUrl = 'https://github.com/http4k/http4k.git'
+                licenses = ['Apache-2.0']
+                labels = []
+                publicDownloadNumbers = true
+                version {
+                    name = project.version
+                    vcsTag = project.version
+                    gpg {
+                        sign = true
+                    }
+                    mavenCentralSync {
+                        sync = false
+                        user = System.getenv('SONATYPE_USER')
+                        password = System.getenv('SONATYPE_KEY')
+                        close = '1'
+                    }
                 }
             }
         }
     }
 
-    jacocoTestReport {
-        reports {
-            xml.enabled = true
-        }
-    }
 }
 
 compileTestKotlin.kotlinOptions {
@@ -169,16 +228,13 @@ compileTestKotlin.kotlinOptions {
     freeCompilerArgs += "-Xjvm-default=enable"
 }
 
-coveralls {
-    sourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs).files.absolutePath
-    jacocoReportPath = file("${buildDir}/reports/jacoco/test/jacocoRootReport.xml")
-}
-
 task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
     dependsOn = subprojects.test
     getSourceDirectories().from(subprojects.sourceSets.main.allSource.srcDirs)
     getClassDirectories().from(subprojects.sourceSets.main.output)
-    getExecutionData().from(subprojects.jacocoTestReport.executionData)
+    getExecutionData().from(subprojects
+        .findAll { it.name != 'http4k-bom' && hasAnArtifact(it) }
+        .jacocoTestReport.executionData)
 
     reports {
         html.enabled = true
@@ -189,50 +245,25 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
 }
 
 dependencies {
-    compile project(":http4k-core")
-    compile project(":http4k-aws")
-    compile project(":http4k-client-apache")
-    compile project(":http4k-client-apache-async")
-    compile project(":http4k-client-jetty")
-    compile project(":http4k-client-okhttp")
-    compile project(":http4k-client-websocket")
-    compile project(":http4k-cloudnative")
-    compile project(":http4k-contract")
-    compile project(":http4k-format-argo")
-    compile project(":http4k-format-gson")
-    compile project(":http4k-format-jackson")
-    compile project(":http4k-format-jackson-xml")
-    compile project(":http4k-format-moshi")
-    compile project(":http4k-format-xml")
-    compile project(":http4k-incubator")
-    compile project(":http4k-jsonrpc")
-    compile project(":http4k-metrics-micrometer")
-    compile project(":http4k-multipart")
-    compile project(":http4k-resilience4j")
-    compile project(":http4k-security-oauth")
-    compile project(":http4k-server-apache")
-    compile project(":http4k-server-jetty")
-    compile project(":http4k-server-ktorcio")
-    compile project(":http4k-server-netty")
-    compile project(":http4k-server-undertow")
-    compile project(":http4k-serverless-gcf")
-    compile project(":http4k-serverless-lambda")
-    compile project(":http4k-template-dust")
-    compile project(":http4k-template-freemarker")
-    compile project(":http4k-template-handlebars")
-    compile project(":http4k-template-pebble")
-    compile project(":http4k-template-thymeleaf")
-    compile project(":http4k-template-dust")
-    compile project(":http4k-template-jade4j")
-    compile project(":http4k-testing-approval")
-    compile project(":http4k-testing-chaos")
-    compile project(":http4k-testing-hamkrest")
-    compile project(":http4k-testing-servirtium")
-    compile project(":http4k-testing-webdriver")
+    subprojects
+        .findAll {
+            hasAnArtifact(it)
+        }
+        .forEach {
+            api project(it.name)
+            testImplementation project(path: it.name, configuration: 'testArtifacts')
+        }
 
-    testCompile Config.TestDependencies
-    testCompile project(path: ":http4k-testing-servirtium", configuration: 'testArtifacts')
-    testCompile project(path: ":http4k-serverless-gcf", configuration: 'testArtifacts')
+    testImplementation(Libs.s3) {
+        exclude group: "software.amazon.awssdk", module: "netty-nio-client"
+        exclude group: "software.amazon.awssdk", module: "apache-client"
+    }
+    testImplementation Libs.graphql_kotlin_schema_generator
+    testImplementation Config.TestDependencies
+}
+
+private boolean hasAnArtifact(Project it) {
+    !it.name.contains("test-function") && !it.name.contains("integration-test")
 }
 
 sourceSets {
@@ -247,26 +278,10 @@ sourceSets {
     }
 }
 
-dokka {
-    outputFormat = "gfm"
-    outputDirectory = "$buildDir/ddoc"
-
-    subProjects = subprojects.collect { i -> i.name }
-
-    configuration {
-        includes = ['src/packages.md']
-        moduleName = "$rootProject.name"
-        jdkVersion = 9
+tasks.create("listProjects") {
+    doLast {
+        subprojects
+            .findAll { hasAnArtifact(it) }
+            .forEach { System.err.println(it.name) }
     }
-}
-
-
-buildSrcVersions {
-    indent = "    "
-}
-
-// To update Gradle, run `$ ./gradlew :buildSrcVersions && ./gradlew wrapper`
-wrapper {
-    gradleVersion = Versions.gradleLatestVersion
-    distributionType = Wrapper.DistributionType.ALL
 }

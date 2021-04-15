@@ -1,7 +1,6 @@
 package org.http4k.lens
 
 import org.http4k.core.Request
-import org.http4k.core.fromFormEncoded
 import org.http4k.core.toPathEncoded
 import org.http4k.lens.ParamMeta.BooleanParam
 import org.http4k.lens.ParamMeta.IntegerParam
@@ -13,7 +12,6 @@ import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
 import java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
 import java.time.format.DateTimeFormatter.ISO_LOCAL_TIME
 import java.time.format.DateTimeFormatter.ISO_ZONED_DATE_TIME
-
 
 open class PathLens<out FINAL>(meta: Meta, private val get: (String) -> FINAL) : Lens<Request, FINAL>(meta, {
     it.path(meta.name)?.let(get) ?: throw LensFailure(Missing(meta), target = it)
@@ -28,8 +26,11 @@ open class PathLens<out FINAL>(meta: Meta, private val get: (String) -> FINAL) :
     override fun toString(): String = "{${meta.name}}"
 }
 
-class BiDiPathLens<FINAL>(meta: Meta, get: (String) -> FINAL, private val set: (FINAL, Request) -> Request)
-    : LensInjector<FINAL, Request>, PathLens<FINAL>(meta, get) {
+class BiDiPathLens<FINAL>(
+    meta: Meta,
+    get: (String) -> FINAL,
+    private val set: (FINAL, Request) -> Request
+) : LensInjector<FINAL, Request>, PathLens<FINAL>(meta, get) {
     @Suppress("UNCHECKED_CAST")
     override operator fun <R : Request> invoke(value: FINAL, target: R): R = set(value, target) as R
 }
@@ -51,9 +52,11 @@ open class PathLensSpec<out OUT>(protected val paramMeta: ParamMeta, internal va
     fun <NEXT> map(nextIn: (OUT) -> NEXT): PathLensSpec<NEXT> = PathLensSpec(paramMeta, get.map(nextIn))
 }
 
-open class BiDiPathLensSpec<OUT>(paramMeta: ParamMeta,
-                                 get: LensGet<String, OUT>,
-                                 private val set: LensSet<Request, OUT>) : PathLensSpec<OUT>(paramMeta, get) {
+open class BiDiPathLensSpec<OUT>(
+    paramMeta: ParamMeta,
+    get: LensGet<String, OUT>,
+    private val set: LensSet<Request, OUT>
+) : PathLensSpec<OUT>(paramMeta, get) {
 
     /**
      * Create another BiDiPathLensSpec which applies the bi-directional transformations to the result. Any resultant Lens can be
@@ -78,7 +81,7 @@ open class BiDiPathLensSpec<OUT>(paramMeta: ParamMeta,
 }
 
 object Path : BiDiPathLensSpec<String>(StringParam,
-    LensGet { _, target -> listOf(target.fromFormEncoded()) },
+    LensGet { _, target -> listOf(target) },
     LensSet { name, values, target -> target.uri(target.uri.path(target.uri.path.replaceFirst("{$name}", values.first().toPathEncoded()))) }) {
 
     fun fixed(name: String): PathLens<String> {

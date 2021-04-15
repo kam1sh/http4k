@@ -1,8 +1,8 @@
 package org.http4k.security.oauth.server
 
-import com.natpryce.get
-import com.natpryce.map
-import com.natpryce.mapFailure
+import dev.forkhandles.result4k.get
+import dev.forkhandles.result4k.map
+import dev.forkhandles.result4k.mapFailure
 import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
@@ -23,7 +23,6 @@ class AuthenticationComplete(
             .forAuthRequest(authorizationRequest).addResponseTypeValues(authorizationRequest, request)
             .withState(authorizationRequest.state)
             .complete()
-
     }
 
     private fun ResponseRender.addResponseTypeValues(authorizationRequest: AuthRequest, request: Request, response: Response = this.complete()): ResponseRender =
@@ -43,7 +42,5 @@ class AuthenticationComplete(
                 .get()
         }
 
-
     private fun String.addTo(responseRender: ResponseRender): ResponseRender = responseRender.addParameter("error_uri", this)
 }
-

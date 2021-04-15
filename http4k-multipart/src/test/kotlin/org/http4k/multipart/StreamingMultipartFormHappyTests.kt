@@ -109,7 +109,6 @@ class StreamingMultipartFormHappyTests {
         assertThereAreNoMoreParts(form)
     }
 
-
     @Test
     fun uploadSmallField() {
         val boundary = "-----3456"
@@ -205,7 +204,6 @@ class StreamingMultipartFormHappyTests {
 
         val file = form.next()
 
-
         while (file.inputStream.read() > 0) {
             // keep reading.
         }
@@ -215,11 +213,10 @@ class StreamingMultipartFormHappyTests {
         file.inputStream.close() // can close multiple times
         try {
             val ignored = file.inputStream.read()
-            fail("Should have complained that the StreamingPart has been closed " + ignored)
+            fail("Should have complained that the StreamingPart has been closed $ignored")
         } catch (e: AlreadyClosedException) {
             // pass
         }
-
     }
 
     @Test
@@ -233,7 +230,7 @@ class StreamingMultipartFormHappyTests {
 
         try {
             val ignored = file.inputStream.read()
-            fail("Should have complained that the StreamingPart has been closed " + ignored)
+            fail("Should have complained that the StreamingPart has been closed $ignored")
         } catch (e: AlreadyClosedException) {
             // pass
         }
@@ -256,7 +253,7 @@ class StreamingMultipartFormHappyTests {
 
         try {
             val ignored = file1.inputStream.read()
-            fail("Should have complained that the StreamingPart has been closed " + ignored)
+            fail("Should have complained that the StreamingPart has been closed $ignored")
         } catch (e: AlreadyClosedException) {
             // pass
         }
@@ -280,7 +277,6 @@ class StreamingMultipartFormHappyTests {
         assertRealLifeFile(parts, "starbucks.jpeg", "image/jpeg")
         assertRealLifeFile(parts, "utf8\uD83D\uDCA9.file", "application/octet-stream")
         assertRealLifeFile(parts, "utf8\uD83D\uDCA9.txt", "text/plain")
-
     }
 
     @Test
@@ -297,14 +293,10 @@ class StreamingMultipartFormHappyTests {
         assertRealLifeFile(parts, "starbucks.jpeg", "image/jpeg")
         assertRealLifeFile(parts, "utf8\uD83D\uDCA9.file", "application/octet-stream")
         assertRealLifeFile(parts, "utf8\uD83D\uDCA9.txt", "text/plain")
-
     }
-
-
 }
 
-val CR_LF = "\r\n"
-
+const val CR_LF = "\r\n"
 
 internal fun assertRealLifeFile(parts: Iterator<StreamingPart>, fileName: String, contentType: String) {
     val file = parts.next()
@@ -320,19 +312,17 @@ internal fun compareStreamToFile(file: StreamingPart) {
     compareStreamToFile(formFile, file.fileName)
 }
 
-
 fun compareStreamToFile(actualSream: InputStream, fileName: String?) {
     val original = FileInputStream("examples/" + fileName!!)
     compareOneStreamToAnother(actualSream, original)
 }
-
 
 fun compareOneStreamToAnother(actualStream: InputStream, expectedStream: InputStream) {
     var index = 0
     while (true) {
         val actual = actualStream.read()
         val expected = expectedStream.read()
-        assertThat("index " + index, actual, equalTo(expected))
+        assertThat("index $index", actual, equalTo(expected))
         index++
         if (actual < 0) {
             break
@@ -363,7 +353,6 @@ internal fun assertFieldPart(form: Iterator<StreamingPart>, fieldName: String, f
     assertPart(fieldName, fieldValue, field, encoding)
     return field
 }
-
 
 internal fun assertPart(fieldName: String, fieldValue: String, StreamingPart: StreamingPart, encoding: Charset) {
     assertThat("field name", StreamingPart.fieldName, equalTo(fieldName))

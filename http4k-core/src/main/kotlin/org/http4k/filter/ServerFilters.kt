@@ -23,20 +23,22 @@ import org.http4k.filter.GzipCompressionMode.Memory
 import org.http4k.lens.Failure
 import org.http4k.lens.Header
 import org.http4k.lens.Header.CONTENT_TYPE
+import org.http4k.lens.Lens
 import org.http4k.lens.LensFailure
 import org.http4k.lens.RequestContextLens
 import org.http4k.routing.ResourceLoader
 import org.http4k.routing.ResourceLoader.Companion.Classpath
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.lang.IllegalArgumentException
 
-data class CorsPolicy(val origins: List<String>,
-                      val headers: List<String>,
-                      val methods: List<Method>,
-                      val credentials: Boolean = false) {
+data class CorsPolicy(
+    val originPolicy: OriginPolicy,
+    val headers: List<String>,
+    val methods: List<Method>,
+    val credentials: Boolean = false
+) {
     companion object {
-        val UnsafeGlobalPermissive = CorsPolicy(listOf("*"), listOf("content-type"), Method.values().toList(), true)
+        val UnsafeGlobalPermissive = CorsPolicy(OriginPolicy.AllowAll(), listOf("content-type"), Method.values().toList(), true)
     }
 }
 
@@ -54,8 +56,8 @@ object ServerFilters {
 
                 val origin = it.header("Origin")
                 val allowedOrigin = when {
-                    "*" in policy.origins -> "*"
-                    origin != null && origin in policy.origins -> origin
+                    policy.originPolicy is AllowAllOriginPolicy -> "*"
+                    origin != null && policy.originPolicy(origin) -> origin
                     else -> "null"
                 }
 
@@ -75,7 +77,8 @@ object ServerFilters {
     object RequestTracing {
         operator fun invoke(
             startReportFn: (Request, ZipkinTraces) -> Unit = { _, _ -> },
-            endReportFn: (Request, Response, ZipkinTraces) -> Unit = { _, _, _ -> }): Filter = Filter { next ->
+            endReportFn: (Request, Response, ZipkinTraces) -> Unit = { _, _, _ -> }
+        ): Filter = Filter { next ->
             {
                 val fromRequest = ZipkinTraces(it)
                 startReportFn(it, fromRequest)
@@ -89,7 +92,6 @@ object ServerFilters {
                     ZipkinTraces.THREAD_LOCAL.remove()
                 }
             }
-
         }
     }
 
@@ -183,6 +185,37 @@ object ServerFilters {
     }
 
     /**
+     * ApiKey token checking.
+     */
+    object ApiKeyAuth {
+        /**
+         * ApiKey token checking using a typed lens.
+         */
+        operator fun <T> invoke(
+            lens: (Lens<Request, T>),
+            validate: (T) -> Boolean
+        ) = ApiKeyAuth { req: Request ->
+            try {
+                validate(lens(req))
+            } catch (e: LensFailure) {
+                false
+            }
+        }
+
+        /**
+         * ApiKey token checking using standard request inspection.
+         */
+        operator fun invoke(validate: (Request) -> Boolean): Filter = Filter { next ->
+            {
+                when {
+                    validate(it) -> next(it)
+                    else -> Response(UNAUTHORIZED)
+                }
+            }
+        }
+    }
+
+    /**
      * Converts Lens extraction failures into correct HTTP responses (Bad Requests/UnsupportedMediaType).
      * This is required when using lenses to automatically unmarshall inbound requests.
      * Note that LensFailures from unmarshalling upstream Response objects are NOT caught to avoid incorrect server behaviour.
@@ -196,9 +229,9 @@ object ServerFilters {
      *
      * Pass the failResponseFn param to provide a custom response for the LensFailure case
      */
-    fun CatchLensFailure(failResponseFn: (LensFailure) -> Response = {
-        Response(BAD_REQUEST.description(it.failures.joinToString("; ")))
-    }) = Filter { next ->
+    fun CatchLensFailure(
+        failResponseFn: (LensFailure) -> Response = { Response(BAD_REQUEST.description(it.failures.joinToString("; "))) }
+    ) = Filter { next ->
         {
             try {
                 next(it)
@@ -258,8 +291,10 @@ object ServerFilters {
      * Only Gunzips requests which contain "transfer-encoding" header containing 'gzip'
      * Only Gzips responses when request contains "accept-encoding" header containing 'gzip' and the content-type (sans-charset) is one of the compressible types.
      */
-    class GZipContentTypes(private val compressibleContentTypes: Set<ContentType>,
-                           private val compressionMode: GzipCompressionMode = Memory) : Filter {
+    class GZipContentTypes(
+        private val compressibleContentTypes: Set<ContentType>,
+        private val compressionMode: GzipCompressionMode = Memory
+    ) : Filter {
         override fun invoke(next: HttpHandler) = RequestFilters.GunZip(compressionMode)
             .then(ResponseFilters.GZipContentTypes(compressibleContentTypes, compressionMode))
             .invoke(next)
@@ -298,8 +333,9 @@ object ServerFilters {
      * after the status code.
      */
     object ReplaceResponseContentsWithStaticFile {
-        operator fun invoke(loader: ResourceLoader = Classpath(),
-                            toResourceName: (Response) -> String? = { if (it.status.successful) null else it.status.code.toString() }
+        operator fun invoke(
+            loader: ResourceLoader = Classpath(),
+            toResourceName: (Response) -> String? = { if (it.status.successful) null else it.status.code.toString() }
         ): Filter = Filter { next ->
             {
                 val response = next(it)

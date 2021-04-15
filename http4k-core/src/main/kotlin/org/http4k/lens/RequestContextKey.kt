@@ -6,15 +6,19 @@ import org.http4k.core.Store
 import org.http4k.lens.ParamMeta.ObjectParam
 import java.util.UUID
 
-
 typealias RequestContextLens<T> = BiDiLens<Request, T>
 
 object RequestContextKey {
     fun <T> required(store: Store<RequestContext>, name: String = UUID.randomUUID().toString()): RequestContextLens<T> {
         val meta = Meta(true, "context", ObjectParam, name)
-        return BiDiLens(meta, { target ->
-            store[target].let { it[name] ?: throw LensFailure(Missing(meta), target = it) }
-        }, { value: T, target: Request -> store[target][name] = value; target })
+        val get: (Request) -> T = { target ->
+            store[target].let {
+                val value: T? = it[name]
+                value ?: throw LensFailure(Missing(meta), target = it)
+            }
+        }
+        val setter = { value: T, target: Request -> store[target][name] = value; target }
+        return BiDiLens(meta, get, setter)
     }
 
     fun <T : Any?> optional(store: Store<RequestContext>, name: String = UUID.randomUUID().toString()) =

@@ -1,6 +1,5 @@
 package org.http4k.lens
 
-
 import com.natpryce.hamkrest.MatchResult.Match
 import com.natpryce.hamkrest.MatchResult.Mismatch
 import com.natpryce.hamkrest.Matcher
@@ -9,7 +8,16 @@ import com.natpryce.hamkrest.and
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.equalTo
 import com.natpryce.hamkrest.throws
+import dev.forkhandles.values.IntValue
+import dev.forkhandles.values.IntValueFactory
+import dev.forkhandles.values.StringValue
+import dev.forkhandles.values.StringValueFactory
+import dev.forkhandles.values.UUIDValue
+import dev.forkhandles.values.UUIDValueFactory
+import dev.forkhandles.values.maxLength
+import org.http4k.lens.ParamMeta.ArrayParam
 import org.http4k.lens.ParamMeta.StringParam
+import java.util.UUID
 
 object BiDiLensContract {
 
@@ -40,7 +48,7 @@ object BiDiLensContract {
         assertThat((spec.map { it.toString() }.multi.optional("hello"))(validValue), equalTo(listOf(tValue.toString())))
         assertThat(optionalMultiLens(nullValue), absent())
         invalidValue?.let {
-            assertThat({ optionalMultiLens(invalidValue) }, throws(lensFailureWith<IN>(Invalid(optionalLens.meta), overallType = Failure.Type.Invalid)))
+            assertThat({ optionalMultiLens(invalidValue) }, throws(lensFailureWith<IN>(Invalid(optionalLens.meta.copy(paramMeta = ArrayParam(optionalLens.meta.paramMeta))), overallType = Failure.Type.Invalid)))
         }
         assertThat(optionalMultiLens(listOf(tValue, tValue), unmodifiedValue), equalTo(listModifiedValue))
 
@@ -56,9 +64,9 @@ object BiDiLensContract {
         val requiredMultiLens = spec.multi.required("hello")
         assertThat(requiredMultiLens(validValue), equalTo(listOf(tValue)))
         assertThat((spec.map { it.toString() }.multi.required("hello"))(validValue), equalTo(listOf(tValue.toString())))
-        assertThat({ requiredMultiLens(nullValue) }, throws(lensFailureWith<IN>(Missing(requiredLens.meta), overallType = Failure.Type.Missing)))
+        assertThat({ requiredMultiLens(nullValue) }, throws(lensFailureWith<IN>(Missing(requiredMultiLens.meta.copy(paramMeta = ArrayParam(requiredLens.meta.paramMeta))), overallType = Failure.Type.Missing)))
         invalidValue?.let {
-            assertThat({ requiredMultiLens(invalidValue) }, throws(lensFailureWith<IN>(Invalid(requiredLens.meta), overallType = Failure.Type.Invalid)))
+            assertThat({ requiredMultiLens(invalidValue) }, throws(lensFailureWith<IN>(Invalid(requiredMultiLens.meta.copy(paramMeta = ArrayParam(requiredLens.meta.paramMeta))), overallType = Failure.Type.Invalid)))
         }
         assertThat(requiredMultiLens(listOf(tValue, tValue), unmodifiedValue), equalTo(listModifiedValue))
 
@@ -96,3 +104,15 @@ inline fun <reified T> lensFailureWith(vararg failures: Failure, overallType: Fa
 }.and(targetIsA<T>())
 
 inline fun <reified T> targetIsA() = Matcher<LensFailure>("target is a " + T::class.qualifiedName) { it.target is T }
+
+class MyInt private constructor(value: Int) : IntValue(value) {
+    companion object : IntValueFactory<MyInt>(::MyInt)
+}
+
+class MyString private constructor(value: String) : StringValue(value) {
+    companion object : StringValueFactory<MyString>(::MyString, 1.maxLength)
+}
+
+class MyUUID private constructor(value: UUID) : UUIDValue(value) {
+    companion object : UUIDValueFactory<MyUUID>(::MyUUID)
+}

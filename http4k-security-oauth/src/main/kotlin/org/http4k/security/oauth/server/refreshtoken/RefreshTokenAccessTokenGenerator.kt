@@ -1,8 +1,8 @@
 package org.http4k.security.oauth.server.refreshtoken
 
-import com.natpryce.Failure
-import com.natpryce.Result
-import com.natpryce.map
+import dev.forkhandles.result4k.Failure
+import dev.forkhandles.result4k.Result
+import dev.forkhandles.result4k.map
 import org.http4k.core.Request
 import org.http4k.security.AccessTokenDetails
 import org.http4k.security.oauth.server.AccessTokenError
@@ -17,5 +17,4 @@ class RefreshTokenAccessTokenGenerator(private val refreshTokens: RefreshTokens)
             ?: return Failure(InvalidRequest("missing required parameter `refresh_token`"))
         return refreshTokens.refreshAccessToken(clientId, tokenRequest, refreshToken).map { AccessTokenDetails(it) }
     }
-
 }

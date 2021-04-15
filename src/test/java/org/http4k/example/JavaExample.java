@@ -23,7 +23,7 @@ public class JavaExample {
     public static void main(String[] args) {
         Filter f = next -> req -> next.invoke(req.body(req.bodyString().substring(0, 5)));
 
-        RoutingHttpHandler routing = routes(bind("/path", POST).to(req -> Response.Companion.invoke(Status.Companion.getACCEPTED(), Request.HTTP_1_1)));
+        RoutingHttpHandler routing = routes(bind("/path", POST).to(req -> Response.create(Status.ACCEPTED)));
 
         RoutingHttpHandler app = then(f, routing);
 
@@ -31,9 +31,9 @@ public class JavaExample {
 
         http4kServer.start();
 
-        DualSyncAsyncHttpHandler client = OkHttp.INSTANCE.invoke(new OkHttpClient.Builder().build(), BodyMode.Memory.INSTANCE);
+        DualSyncAsyncHttpHandler client = OkHttp.create(new OkHttpClient.Builder().build(), BodyMode.Memory.INSTANCE);
 
-        System.out.println(client.invoke(Request.Companion.invoke(POST, "http://localhost:8000/path", Request.HTTP_1_1).body("1234567890")));
+        System.out.println(client.invoke(Request.create(POST, "http://localhost:8000/path").body("1234567890")));
 
         http4kServer.stop();
     }

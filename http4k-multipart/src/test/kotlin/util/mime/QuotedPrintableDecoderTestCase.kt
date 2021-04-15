@@ -76,9 +76,7 @@ class QuotedPrintableDecoderTestCase {
             assertEncoded("=\r\n", "=3D=XD=XA")
             fail<Any>("did not throw")
         } catch (e: IOException) {
-
         }
-
     }
 
     /**
@@ -114,7 +112,7 @@ class QuotedPrintableDecoderTestCase {
 
     companion object {
 
-        private val US_ASCII_CHARSET = "US-ASCII"
+        private const val US_ASCII_CHARSET = "US-ASCII"
 
         @Throws(Exception::class)
         private fun assertEncoded(clearText: String, encoded: String) {
@@ -141,5 +139,4 @@ class QuotedPrintableDecoderTestCase {
             }
         }
     }
-
 }

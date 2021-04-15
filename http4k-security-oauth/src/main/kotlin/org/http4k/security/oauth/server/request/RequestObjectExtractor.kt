@@ -1,112 +1,84 @@
 package org.http4k.security.oauth.server.request
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL
-import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES
-import com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY
-import com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES
-import com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
-import com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_INTEGER_FOR_INTS
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ArrayNode
-import com.fasterxml.jackson.databind.node.TextNode
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.natpryce.Failure
-import com.natpryce.Result
-import com.natpryce.Success
-import com.natpryce.map
+import dev.forkhandles.result4k.Failure
+import dev.forkhandles.result4k.Result
+import dev.forkhandles.result4k.Success
+import dev.forkhandles.result4k.map
 import org.http4k.core.Uri
-import org.http4k.format.ConfigurableJackson
-import org.http4k.format.asConfigurable
-import org.http4k.lens.BiDiMapping
 import org.http4k.security.ResponseMode
 import org.http4k.security.ResponseType
 import org.http4k.security.State
 import org.http4k.security.oauth.server.ClientId
 import org.http4k.security.oauth.server.InvalidRequestObject
+import org.http4k.security.oauth.server.OAuthServerMoshi
+import org.http4k.security.oauth.server.boolean
+import org.http4k.security.oauth.server.long
+import org.http4k.security.oauth.server.map
+import org.http4k.security.oauth.server.string
+import org.http4k.security.oauth.server.strings
+import org.http4k.security.oauth.server.value
 import org.http4k.security.openid.Nonce
 import java.util.Base64
-import kotlin.reflect.KClass
 
 object RequestObjectExtractor {
 
-    internal fun extractRequestJwtClaimsAsMap(value: String): Result<Map<*, *>, InvalidRequestObject> {
-        return parseJsonFromJWT(value, Map::class)
-    }
+    internal fun extractRequestJwtClaimsAsMap(value: String): Result<Map<*, *>, InvalidRequestObject> =
+        parseJsonFromJWT(value)
 
-    internal fun extractRequestObjectFromJwt(value: String): Result<RequestObject, InvalidRequestObject> {
-        return parseJsonFromJWT(value, RequestObjectJson::class)
+    internal fun extractRequestObjectFromJwt(value: String): Result<RequestObject, InvalidRequestObject> =
+        parseJsonFromJWT(value)
             .map { jsonFromJWT ->
-                RequestObject(
-                    client = jsonFromJWT.client,
-                    redirectUri = jsonFromJWT.redirectUri,
-                    audience = toAudience(jsonFromJWT.audience),
-                    issuer = jsonFromJWT.issuer,
-                    scope = jsonFromJWT.scope?.split(" ") ?: emptyList(),
-                    responseMode = jsonFromJWT.responseMode,
-                    responseType = jsonFromJWT.responseType,
-                    state = jsonFromJWT.state,
-                    nonce = jsonFromJWT.nonce,
-                    magAge = jsonFromJWT.magAge,
-                    expiry = jsonFromJWT.expiry,
-                    claims = jsonFromJWT.claims
-                )
+                with(jsonFromJWT) {
+                    RequestObject(
+                        client = value("client_id", ::ClientId),
+                        redirectUri = value("redirect_uri", Uri::of),
+                        audience = toAudience(this["aud"]),
+                        issuer = string("iss"),
+                        scope = string("scope")?.split(" ") ?: emptyList(),
+                        responseMode = value("response_mode", ResponseMode::fromQueryParameterValue),
+                        responseType = value("response_type", ResponseType::fromQueryParameterValue),
+                        state = value("state", ::State),
+                        nonce = value("nonce", ::Nonce),
+                        magAge = long("max_age"),
+                        expiry = long("exp"),
+                        claims = toClaims(this["claims"])
+                    )
+                }
             }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun toClaims(claims: Any?) = when (claims) {
+        is Map<*, *> -> Claims(
+            asClaims(claims.map("userinfo")),
+            asClaims(claims.map("id_token"))
+        )
+        else -> Claims()
     }
 
-    private fun toAudience(jsonValue: JsonNode): List<String> {
-        return when (jsonValue) {
-            is ArrayNode -> jsonValue.map { it.textValue() }
-            is TextNode -> listOf(jsonValue.textValue())
-            else -> emptyList()
+    @Suppress("UNCHECKED_CAST")
+    private fun asClaims(claims: Map<String, Any>?) = claims
+        ?.mapValues {
+            val claim = it.value as Map<String, Any>
+            Claim(
+                claim.boolean("essential") ?: false,
+                claim.string("value"),
+                claim.strings("values")
+            )
         }
+
+    private fun toAudience(audience: Any?): List<String> = when (audience) {
+        is List<*> -> audience.map { it.toString() }
+        is String -> listOf(audience)
+        else -> emptyList()
     }
 
-    private fun <T : Any> parseJsonFromJWT(value: String, target: KClass<T>): Result<T, InvalidRequestObject> {
-        try {
-            val jwtParts = value.split(".")
-            if (jwtParts.size != 3) {
-                return Failure(InvalidRequestObject)
-            }
-            return Success(RequestObjectExtractorJson.asA(String(Base64.getUrlDecoder().decode(jwtParts[1])), target))
-        } catch (e: IllegalArgumentException) {
-            return Failure(InvalidRequestObject)
-        } catch (e: JsonParseException) {
-            return Failure(InvalidRequestObject)
+    private fun parseJsonFromJWT(value: String) = try {
+        val jwtParts = value.split(".")
+        when {
+            jwtParts.size != 3 -> Failure(InvalidRequestObject)
+            else -> Success(OAuthServerMoshi.asA<Map<String, Any>>(String(Base64.getUrlDecoder().decode(jwtParts[1]))))
         }
+    } catch (e: Exception) {
+        Failure(InvalidRequestObject)
     }
-
-    internal object RequestObjectExtractorJson : ConfigurableJackson(
-        KotlinModule()
-            .asConfigurable()
-            .text(BiDiMapping(ResponseMode::class.java, { ResponseMode.fromQueryParameterValue(it) }, { it.queryParameterValue }))
-            .text(BiDiMapping(ResponseType::class.java, { ResponseType.fromQueryParameterValue(it) }, { it.queryParameterValue }))
-            .text(BiDiMapping(ClientId::class.java, { ClientId(it) }, { it.value }))
-            .text(BiDiMapping(Uri::class.java, { Uri.of(it) }, { it.toString() }))
-            .text(BiDiMapping(State::class.java, { State(it) }, { it.value }))
-            .text(BiDiMapping(Nonce::class.java, { Nonce(it) }, { it.value }))
-            .done()
-            .setSerializationInclusion(NON_NULL)
-            .configure(FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .configure(FAIL_ON_IGNORED_PROPERTIES, false)
-            .configure(USE_BIG_DECIMAL_FOR_FLOATS, true)
-            .configure(USE_BIG_INTEGER_FOR_INTS, true)
-            .configure(FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY, false)
-
-    )
-
-    internal data class RequestObjectJson(@JsonProperty("client_id") val client: ClientId? = null,
-                                          @JsonProperty("redirect_uri") val redirectUri: Uri? = null,
-                                          @JsonProperty("aud") val audience: JsonNode,
-                                          @JsonProperty("iss") val issuer: String? = null,
-                                          @JsonProperty("scope") val scope: String?,
-                                          @JsonProperty("response_mode") val responseMode: ResponseMode? = null,
-                                          @JsonProperty("response_type") val responseType: ResponseType? = null,
-                                          @JsonProperty("state") val state: State? = null,
-                                          @JsonProperty("nonce") val nonce: Nonce? = null,
-                                          @JsonProperty("max_age") val magAge: Long? = null,
-                                          @JsonProperty("exp") val expiry: Long? = null,
-                                          @JsonProperty("claims") val claims: Claims = Claims())
-
 }

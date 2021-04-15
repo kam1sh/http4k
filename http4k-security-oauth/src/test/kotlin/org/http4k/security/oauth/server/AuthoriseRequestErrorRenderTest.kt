@@ -1,8 +1,8 @@
 package org.http4k.security.oauth.server
 
-import com.natpryce.Result
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.equalTo
+import dev.forkhandles.result4k.Result
 import org.http4k.core.ContentType.Companion.APPLICATION_JSON
 import org.http4k.core.Method.GET
 import org.http4k.core.Request
@@ -17,7 +17,6 @@ import org.http4k.security.ResponseMode.Query
 import org.http4k.security.ResponseType.Code
 import org.http4k.security.ResponseType.CodeIdToken
 import org.http4k.security.oauth.server.request.RequestJWTValidator
-import org.http4k.security.openid.RequestJwtContainer
 import org.junit.jupiter.api.Test
 import java.util.Base64
 
@@ -109,7 +108,6 @@ internal class AuthoriseRequestErrorRenderTest {
             .header("Location", "https://someValidHost?error=invalid_grant&error_description=The+%27client_id%27+parameter+does+not+match+the+authorization+request&error_uri=https%3A%2F%2FsomeDocumentationUri")))
     }
 
-
     @Test
     fun `If response mode is in request jwt not request uri then use the request one`() {
         assertThat(underTest.errorFor(Request(GET, "/?client_id=validClient&redirect_uri=https://someValidHost&request=${generateARequestJwt(responseType = CodeIdToken.queryParameterValue, responseMode = Query.queryParameterValue)}"), ClientIdMismatch), equalTo(Response(SEE_OTHER)
@@ -152,7 +150,6 @@ internal class AuthoriseRequestErrorRenderTest {
             .header("Location", "https://someValidHost?error=invalid_grant&error_description=The+%27client_id%27+parameter+does+not+match+the+authorization+request&error_uri=https%3A%2F%2FsomeDocumentationUri")))
     }
 
-
     @Test
     fun `If redirect_uri is in request jwt not request uri then use the request one`() {
         assertThat(underTest.errorFor(Request(GET, "/?client_id=validClient&request=${generateARequestJwt(redirectUri = "https://someValidHost")}"), ClientIdMismatch), equalTo(Response(SEE_OTHER)
@@ -194,7 +191,6 @@ internal class AuthoriseRequestErrorRenderTest {
             .body("{\"error\":\"invalid_grant\",\"error_description\":\"The 'client_id' parameter does not match the authorization request\",\"error_uri\":\"https://someDocumentationUri\"}")))
     }
 
-
     private val authoriseRequestValidator = object : AuthoriseRequestValidator {
 
         private val validClients = mapOf(
@@ -206,16 +202,10 @@ internal class AuthoriseRequestErrorRenderTest {
 
         override fun validate(request: Request, authorizationRequest: AuthRequest): Result<Request, OAuthError> =
             throw UnsupportedOperationException("not needed for this test")
-
     }
 
-    private val requestValidator = object : RequestJWTValidator {
-        override fun validate(clientId: ClientId, requestJwtContainer: RequestJwtContainer): InvalidAuthorizationRequest? {
-            return if (requestJwtContainer.value == "inValidRequest") {
-                InvalidAuthorizationRequest("request not correctly signed")
-            } else null
-        }
-
+    private val requestValidator = RequestJWTValidator { _, requestJwtContainer ->
+        if (requestJwtContainer.value == "inValidRequest") InvalidAuthorizationRequest("request not correctly signed") else null
     }
 
     private val documentationUri = "https://someDocumentationUri"

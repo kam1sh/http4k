@@ -1,6 +1,5 @@
 package org.http4k.cloudnative.env
 
-
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.equalTo
 import org.http4k.cloudnative.env.Environment.Companion.EMPTY
@@ -15,7 +14,7 @@ import org.http4k.lens.composite
 import org.http4k.lens.int
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.util.*
+import java.util.Properties
 
 class EnvironmentKeyTest {
 
